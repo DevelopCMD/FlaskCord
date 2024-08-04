@@ -12,3 +12,8 @@ A simple Discord clone made with Flask and Python.
 - Add channels
 - Add voice channels
 - Store messages in db file
+- Add 2fa
+- Add account creation
+- Add server creation
+  
+There's too many things that I want to add, and I can't list all of them here, but these are the basics.
