@@ -60,7 +60,7 @@
             var messages = document.getElementById('messages');
             var message = document.createElement('div');
             message.className = 'message';
-            message.innerHTML = `<strong>${msg.username}</strong>: <span>${msg.message}</span>`;
+            message.innerHTML = `<strong>${msg.username}</strong> <span>${msg.message}</span>`;
             if (msg.username === username) {
                 var deleteButton = document.createElement('button');
                 deleteButton.textContent = 'Delete';
