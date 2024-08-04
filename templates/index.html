@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord Clone</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #2f3136;
+            color: #dcddde;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        #chat {
+            width: 80%;
+            height: 80%;
+            max-width: 800px;
+            max-height: 600px;
+            background-color: #36393f;
+            border-radius: 5px;
+            display: flex;
+            overflow: hidden;
+        }
+        #userList {
+            width: 200px;
+            background-color: #2f3136;
+            border-right: 1px solid #202225;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-sizing: border-box;
+            overflow-y: auto;
+        }
+        #userList h2 {
+            color: #dcddde;
+            margin: 0;
+            padding-bottom: 10px;
+        }
+        #username {
+            padding: 10px;
+            background-color: #2f3136;
+            border-bottom: 1px solid #202225;
+        }
+        #username input {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 3px;
+            background-color: #40444b;
+            color: #dcddde;
+        }
+        #messages {
+            flex-grow: 1;
+            padding: 10px;
+            overflow-y: auto;
+            border-bottom: 1px solid #202225;
+            display: flex;
+            flex-direction: column;
+        }
+        #input {
+            padding: 10px;
+            background-color: #2f3136;
+            display: flex;
+        }
+        #input input {
+            flex-grow: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 3px;
+            background-color: #40444b;
+            color: #dcddde;
+        }
+        #input button {
+            width: 50px;
+            padding: 10px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 3px;
+            background-color: #7289da;
+            color: #dcddde;
+            cursor: pointer;
+        }
+        #input button:hover {
+            background-color: #5a73b8;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 5px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            background-color: #40444b;
+            position: relative;
+        }
+        .message strong {
+            color: #7289da;
+            margin-right: 5px;
+        }
+        .message span {
+            flex-grow: 1;
+        }
+        .message button {
+            display: none;
+            position: absolute;
+            right: 10px;
+            background: none;
+            border: none;
+            color: #dcddde;
+            cursor: pointer;
+        }
+        .message:hover button {
+            display: inline;
+        }
+        .typing {
+            padding: 10px;
+            font-style: italic;
+            color: #72767d;
+        }
+        .error {
+            color: #ff5c5c;
+            padding: 10px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat">
+        <div id="userList">
+            <h2>Online Users</h2>
+            <div id="users"></div>
+        </div>
+        <div style="flex-grow: 1; display: flex; flex-direction: column;">
+            <div id="username">
+                <input type="text" id="usernameInput" placeholder="Enter your username" oninput="removeSpaces(this)" />
+            </div>
+            <div id="messages"></div>
+            <div class="typing" id="typingIndicator"></div>
+            <div id="input">
+                <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="checkEnter(event)" oninput="notifyTyping()" />
+                <button onclick="sendMessage()">Send</button>
+            </div>
+            <div class="error" id="errorIndicator"></div>
+        </div>
+    </div>
+    <script>
+        var socket = io();
+        var username = '';
+
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+
+        socket.on('update_users', function(data) {
+            var userList = document.getElementById('users');
+            userList.innerHTML = '';
+            data.users.forEach(function(user) {
+                var userItem = document.createElement('div');
+                userItem.textContent = user;
+                userList.appendChild(userItem);
+            });
+        });
+
+        socket.on('user_left', function(data) {
+            console.log(`${data.username} left`);
+            var users = document.getElementById('users');
+            var userItems = Array.from(users.children);
+            userItems.forEach(function(userItem) {
+                if (userItem.textContent === data.username) {
+                    users.removeChild(userItem);
+                }
+            });
+        });
+
+        socket.on('message', function(msg){
+            console.log('Message received: ', msg);
+            var messages = document.getElementById('messages');
+            var message = document.createElement('div');
+            message.className = 'message';
+            message.innerHTML = `<strong>${msg.username}</strong>: <span>${msg.message}</span>`;
+            if (msg.username === username) {
+                var deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Delete';
+                deleteButton.onclick = function() {
+                    socket.emit('delete_message', { id: msg.id, username: username });
+                };
+                message.appendChild(deleteButton);
+            }
+            messages.appendChild(message);
+            messages.scrollTop = messages.scrollHeight; // Auto-scroll to the bottom
+        });
+
+        socket.on('delete_message', function(data) {
+            var messages = document.getElementById('messages');
+            var message = Array.from(messages.children).find(msg => msg.querySelector('strong').textContent === username && msg.querySelector('span').textContent.includes(data.message));
+            if (message) {
+                messages.removeChild(message);
+            }
+        });
+
+        socket.on('typing', function(data) {
+            var typingIndicator = document.getElementById('typingIndicator');
+            if (data.username !== username) {
+                typingIndicator.textContent = `${data.username} is typing...`;
+                setTimeout(function() {
+                    typingIndicator.textContent = '';
+                }, 3000);
+            }
+        });
+
+        socket.on('error', function(data) {
+            var errorIndicator = document.getElementById('errorIndicator');
+            errorIndicator.textContent = `Error: ${data.error}`;
+            setTimeout(function() {
+                errorIndicator.textContent = '';
+            }, 5000);
+        });
+
+        function sendMessage() {
+            var usernameInput = document.getElementById('usernameInput');
+            var messageInput = document.getElementById('messageInput');
+            username = usernameInput.value.trim() || 'Anonymous';
+            var message = messageInput.value.trim();
+
+            if (username && message) {
+                console.log('Sending message: ', message);
+                socket.send({ username: username, message: message });
+                messageInput.value = '';
+            } else {
+                alert('Please enter both a username and a message.');
+            }
+        }
+
+        function checkEnter(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function removeSpaces(input) {
+            input.value = input.value.replace(/\s+/g, '');
+        }
+
+        function notifyTyping() {
+            var usernameInput = document.getElementById('usernameInput');
+            username = usernameInput.value.trim() || 'Anonymous';
+            if (username) {
+                socket.emit('typing', { username: username });
+            }
+        }
+
+        document.getElementById('usernameInput').addEventListener('change', function() {
+            socket.emit('set_username', { username: this.value });
+        });
+    </script>
+</body>
+</html>
